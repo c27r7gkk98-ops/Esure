@@ -1,0 +1,182 @@
+
+:root{
+  --blue:#2461ff; --blue2:#3258ff; --purple:#8f16ff; --ink:#111c35;
+  --muted:#60708b; --bg:#f3f7fd; --card:#fff; --danger:#ff2b3f; --green:#08b995;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+.demo-banner{position:sticky;top:0;z-index:1000;background:#111c35;color:#fff;text-align:center;padding:8px 12px;font-size:12px;font-weight:800;letter-spacing:.08em}
+.shell{max-width:880px;margin:0 auto;min-height:100vh;padding-bottom:96px}
+.header{display:flex;align-items:center;justify-content:space-between;background:#fff;padding:22px 28px;border-bottom:1px solid #e5ebf5}
+.brand{display:flex;align-items:center;gap:14px}.brand img{width:94px;height:44px;object-fit:cover;border-radius:8px}.brand b{font-size:24px}.brand small{display:block;color:var(--muted)}
+.user-chip{display:flex;align-items:center;gap:10px}.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#8ba0bd;color:#fff;font-weight:800}
+.content{padding:28px}
+.hero{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;padding:28px;border-radius:0 0 26px 26px;display:flex;justify-content:space-between;gap:20px}
+.hero h1{margin:0 0 6px;font-size:30px}.hero p{margin:0;opacity:.88}.hero .value{text-align:right;font-size:28px;font-weight:800}
+.card{background:#fff;border-radius:24px;padding:24px;box-shadow:0 12px 28px rgba(31,52,86,.12);margin:18px 0}
+.policy-card{background:linear-gradient(135deg,#0f79e6,#0355b3);color:#fff}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.stat{text-align:center;padding:20px 10px}.stat strong{font-size:30px;display:block}.stat span{color:var(--muted)}
+.info-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{background:#f7f9fc;border-radius:16px;padding:16px}.field label{display:block;color:var(--muted);font-size:14px;margin-bottom:5px}
+.dark{background:#111c35;color:#fff}.dark .muted{color:#c7d1e2}.green{background:linear-gradient(135deg,#02c28d,#0ca2a4);color:#fff}
+.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:800;cursor:pointer}.btn-primary{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff}.btn-orange{background:#ff9000;color:#fff}.btn-light{background:#fff;color:var(--ink);border:1px solid #dbe4f1}.btn-danger{background:var(--danger);color:#fff}.btn-wide{width:100%}
+.login-wrap{min-height:calc(100vh - 36px);display:grid;place-items:center;padding:28px}.login-card{width:min(100%,720px);background:#fff;border-radius:26px;padding:34px;box-shadow:0 14px 35px rgba(24,44,80,.14)}.login-card h1{text-align:center}.login-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:80px}.login-top img{width:120px}.input{width:100%;padding:16px;border:2px solid #d3deec;border-radius:14px;margin:8px 0 18px}.help-link{color:var(--blue);font-weight:800}
+.nav{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,880px);background:#fff;border-top:1px solid #e3e9f1;display:grid;grid-template-columns:repeat(5,1fr);padding:10px 8px calc(10px + env(safe-area-inset-bottom));z-index:999}.nav button{border:0;background:transparent;padding:10px 4px;color:#40516d;font-weight:700}.nav button.active{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;border-radius:18px}.nav .logout{color:var(--danger)}
+.badge{display:inline-block;padding:7px 11px;border-radius:12px;font-weight:800;font-size:13px}.badge.active{background:#d7f8ea;color:#07895f}.badge.expired{background:#ffe0e3;color:#c51f34}
+.faq-item{border:1px solid #e4ebf4;border-radius:18px;margin:12px 0;overflow:hidden}.faq-q{width:100%;background:#fff;border:0;padding:18px;text-align:left;font-weight:800}.faq-a{display:none;padding:0 18px 18px;color:var(--muted)}.faq-item.open .faq-a{display:block}
+.admin-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.admin-grid .full{grid-column:1/-1}.admin-grid input,.admin-grid select,.admin-grid textarea{width:100%;padding:12px;border:1px solid #cfd9e8;border-radius:12px}
+.certificate{background:#fff;color:#222;padding:38px;max-width:800px;margin:20px auto}.certificate h1{font-size:36px}.cert-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}.cert-section{border-top:1px solid #ddd;padding-top:16px}.print-only{display:none}
+@media(max-width:650px){.content{padding:18px}.header{padding:16px}.brand b{font-size:20px}.brand img{width:78px}.grid3,.info-row,.admin-grid,.cert-grid{grid-template-columns:1fr}.hero{border-radius:0}.user-chip .name{display:none}.nav{grid-template-columns:repeat(5,1fr);font-size:12px}.login-card{padding:24px}.login-top{margin-bottom:50px}}
+@media print{body{background:#fff}.demo-banner,.nav,.header,.no-print{display:none!important}.certificate{box-shadow:none;margin:0;max-width:none}.print-only{display:block}}
+
+.nav-admin{grid-template-columns:repeat(6,1fr)}
+.admin-grid select,.card select{width:100%;padding:12px;border:1px solid #cfd9e8;border-radius:12px;background:white}
+@media(max-width:650px){.nav-admin{font-size:10px}.nav-admin button{padding:8px 2px}}
+
+.certificate-stage{padding:18px;overflow:auto;background:#e9eef6}
+.certificate-template{position:relative;width:min(100%,900px);margin:0 auto;background:#fff;box-shadow:0 12px 30px rgba(20,39,70,.18)}
+.certificate-template>img{display:block;width:100%;height:auto}
+.cert-overlay{position:absolute;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-weight:700;line-height:1.15;padding:0 2px;white-space:nowrap}
+.issue-date{left:62.0%;top:9.60%;font-size:1.15vw;min-width:15.5%}
+.policy-number{left:62.0%;top:13.18%;font-size:1.1vw;min-width:16.8%}
+.registration{left:24.7%;top:23.31%;font-size:1.15vw;min-width:15.5%}
+.vehicle-model{left:20.8%;top:25.18%;font-size:1.15vw;min-width:27.7%}
+.vehicle-year{left:28.3%;top:27.05%;font-size:1.15vw;min-width:10.2%}
+.vehicle-make{left:19.7%;top:28.88%;font-size:1.15vw;min-width:13.8%}
+.policyholder{left:23.4%;top:43.57%;font-size:1.05vw;min-width:23.9%}
+.commencement{left:8.1%;top:45.68%;font-size:1.03vw;min-width:39.5%;font-weight:400}
+.expiry{left:8.1%;top:48.55%;font-size:1.03vw;min-width:37.8%;font-weight:400}
+.driving-other{left:64.3%;top:23.35%;font-size:1.0vw;min-width:15.8%;font-weight:400}
+.prototype-stamp{position:absolute;right:2.8%;bottom:2.4%;padding:7px 10px;border:2px solid #c82333;color:#c82333;background:#fff;font:700 12px Arial;transform:rotate(-2deg)}
+@media(max-width:900px){
+ .cert-overlay{font-size:1.75vw}
+ .issue-date,.registration,.vehicle-model,.vehicle-year,.vehicle-make{font-size:1.75vw}
+ .policy-number{font-size:1.68vw}
+ .policyholder,.commencement,.expiry,.driving-other{font-size:1.55vw}
+}
+@media(max-width:600px){
+ .certificate-stage{padding:8px}
+ .cert-overlay{font-size:2.05vw}
+ .issue-date,.registration,.vehicle-model,.vehicle-year,.vehicle-make{font-size:2.05vw}
+ .policy-number{font-size:1.95vw}
+ .policyholder,.commencement,.expiry,.driving-other{font-size:1.8vw}
+ .prototype-stamp{font-size:7px;padding:3px 5px;border-width:1px}
+}
+@media print{
+ @page{size:A4 portrait;margin:0}
+ body{margin:0}
+ .certificate-actions,.demo-banner,.nav,.header{display:none!important}
+ .shell{max-width:none;padding:0;min-height:0}
+ .certificate-stage{padding:0;background:#fff;overflow:visible}
+ .certificate-template{width:210mm;height:297mm;box-shadow:none;margin:0}
+ .certificate-template>img{width:210mm;height:297mm}
+ .cert-overlay{font-size:9.5pt}
+ .issue-date,.registration,.vehicle-model,.vehicle-year,.vehicle-make{font-size:9.5pt}
+ .policy-number{font-size:9pt}
+ .policyholder,.commencement,.expiry,.driving-other{font-size:8.5pt}
+ .prototype-stamp{font-size:7pt}
+}
+
+.cert-page-wrap{padding:18px;background:#e9eef6;overflow:auto}
+.motor-certificate{
+  position:relative;
+  width:min(100%,900px);
+  min-height:1273px;
+  margin:0 auto;
+  padding:48px 46px 72px;
+  background:#fff;
+  color:#111;
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:14px;
+  line-height:1.18;
+  overflow:hidden;
+  box-shadow:0 12px 30px rgba(20,39,70,.18);
+}
+.cert-watermarks{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.cert-watermarks span{
+  position:absolute;
+  transform:rotate(18deg);
+  color:#d7d7d7;
+  font-size:44px;
+  font-weight:400;
+  opacity:.92;
+}
+.motor-certificate>*:not(.cert-watermarks){position:relative;z-index:1}
+.cert-logo{color:#0075c9;font-size:42px;font-weight:700;text-align:right;margin-bottom:32px}
+.cert-top{border:5px solid #f57c00;display:grid;grid-template-columns:58% 42%;padding:8px 16px 18px;margin-bottom:26px;min-height:138px}
+.cert-title-block h1{font-size:29px;margin:7px 0 8px;line-height:1}
+.cert-title-block p,.cert-meta p{margin:0 0 6px}
+.cert-columns{display:grid;grid-template-columns:1fr 1fr;gap:34px}
+.cert-column{position:relative;padding-left:17px;min-height:635px}
+.cert-column .blue-rule{position:absolute;left:0;top:0;bottom:0;width:14px;background:#0876c9}
+.cert-column h3{font-size:16px;margin:12px 0 14px}
+.cert-column p{margin:0 0 11px}
+.cert-spacer{margin-top:30px!important}
+.cert-dashes{list-style:none;padding:0;margin:0}
+.cert-dashes li{margin:0 0 13px;padding-left:15px;position:relative}
+.cert-dashes li:before{content:"-";position:absolute;left:0}
+.cert-booklet{color:#0075c9;font-size:16px;margin:45px 0 35px 22px}
+.cert-footer{margin-left:22px}
+.cert-footer img{width:150px;height:52px;object-fit:contain;object-position:left bottom;display:block;margin-bottom:-4px}
+.cert-footer p{font-size:16px;line-height:1.35;margin:0}
+.prototype-stamp-html{position:absolute!important;right:30px;bottom:25px;border:2px solid #c82333;color:#c82333;background:white;padding:7px 10px;font-size:11px;font-weight:700;transform:rotate(-2deg)}
+@media(max-width:700px){
+  .motor-certificate{min-height:auto;padding:26px 22px 54px;font-size:9px;width:760px}
+  .cert-logo{font-size:30px;margin-bottom:22px}
+  .cert-top{min-height:104px;border-width:4px;padding:7px 11px 12px}
+  .cert-title-block h1{font-size:21px}
+  .cert-columns{gap:24px}
+  .cert-column{min-height:510px;padding-left:13px}
+  .cert-column .blue-rule{width:10px}
+  .cert-column h3{font-size:11px}
+  .cert-booklet{font-size:11px;margin-top:30px}
+  .cert-footer p{font-size:11px}
+  .cert-footer img{width:105px;height:38px}
+}
+@media print{
+  @page{size:A4 portrait;margin:0}
+  body{background:#fff}
+  .certificate-actions,.demo-banner,.nav,.header{display:none!important}
+  .shell{max-width:none;padding:0;min-height:0}
+  .cert-page-wrap{padding:0;background:#fff;overflow:visible}
+  .motor-certificate{
+    width:210mm;
+    height:297mm;
+    min-height:297mm;
+    margin:0;
+    padding:11mm 10mm 16mm;
+    box-shadow:none;
+    font-size:9.5pt;
+  }
+  .cert-logo{font-size:28pt;margin-bottom:6mm}
+  .cert-top{min-height:31mm;padding:2mm 4mm 4mm;margin-bottom:6mm}
+  .cert-title-block h1{font-size:20pt}
+  .cert-columns{gap:8mm}
+  .cert-column{min-height:151mm;padding-left:4mm}
+  .cert-column .blue-rule{width:3mm}
+  .cert-column h3{font-size:11pt}
+  .cert-booklet{font-size:10.5pt;margin:10mm 0 8mm 5mm}
+  .cert-footer{margin-left:5mm}
+  .cert-footer img{width:34mm;height:12mm}
+  .cert-footer p{font-size:10pt}
+  .prototype-stamp-html{font-size:7pt}
+}
+
+.btn-success{background:linear-gradient(135deg,#00a86b,#09bd8b);color:#fff}
+.admin-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+.policy-section-title{margin-top:34px;margin-bottom:8px}
+.policy-card .badge.expired{background:#ffe3e6;color:#bf2134}
+.admin-actions .btn{flex:0 1 auto}
+
+.renewal-alert{margin-top:14px;padding:10px 12px;border-radius:12px;font-size:13px;font-weight:800}
+.renewal-alert.notice{background:#e8f1ff;color:#124fb5}
+.renewal-alert.warning{background:#fff3cf;color:#8a5a00}
+.renewal-alert.urgent{background:#ffe0e4;color:#b51f34}
+
+.premium-breakdown{margin-top:10px}
+.premium-breakdown-row,.premium-breakdown-total{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px 0;border-top:1px solid #35425a}
+.premium-breakdown-row>div{display:flex;flex-direction:column;gap:4px}
+.premium-breakdown-row small{color:#c7d1e2}
+.premium-breakdown-total{margin-top:4px;font-size:17px}
+.premium-breakdown-total strong{font-size:20px}
