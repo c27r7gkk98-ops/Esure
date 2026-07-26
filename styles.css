@@ -121,7 +121,7 @@ button,input,select,textarea{font:inherit}
 .cert-footer p{font-size:16px;line-height:1.35;margin:0}
 .prototype-stamp-html{position:absolute!important;right:30px;bottom:25px;border:2px solid #c82333;color:#c82333;background:white;padding:7px 10px;font-size:11px;font-weight:700;transform:rotate(-2deg)}
 @media(max-width:700px){
-  .motor-certificate{min-height:auto;padding:26px 22px 54px;font-size:9px;width:760px}
+  .motor-certificate{min-height:auto;padding:26px 22px 54px;font-size:9px;width:100%;max-width:100%;}
   .cert-logo{font-size:30px;margin-bottom:22px}
   .cert-top{min-height:104px;border-width:4px;padding:7px 11px 12px}
   .cert-title-block h1{font-size:21px}
