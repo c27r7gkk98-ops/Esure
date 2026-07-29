@@ -301,3 +301,10 @@ button,input,select,textarea{font:inherit}
   .nav-admin-account{font-size:9px}
   .nav-admin-account button{padding:7px 1px}
 }
+
+
+/* Firestore customer login status */
+.customer-login-status{padding:12px 14px;border-radius:12px;font-weight:800}
+.customer-login-status.ready{background:#d7f8ea;color:#07895f}
+.customer-login-status.pending{background:#fff3cf;color:#8a5a00}
+.admin-grid input[readonly],.admin-grid input:disabled{background:#eef3f9;color:#60708b}

@@ -70,22 +70,208 @@ function migrate(){
   };
 }
 
+const auth=firebase.auth();
+const db=firebase.firestore();
+const settingsRef=db.collection("settings").doc("main");
+const customersRef=db.collection("customers");
+const usersRef=db.collection("users");
+const secondaryApp=firebase.apps.find(app=>app.name==="customerCreator") || firebase.initializeApp(firebase.app().options,"customerCreator");
+const secondaryAuth=secondaryApp.auth();
+
 let data=migrate();
-function storedCustomerSession(){
-  try{
-    const saved=JSON.parse(sessionStorage.getItem("esureSessionV2")||"null");
-    if(saved?.role==="customer" && data.customers.some(c=>c.id===saved.customerId)) return saved;
-  }catch(error){
-    console.warn("Could not restore customer session",error);
-  }
-  return null;
-}
-let session=storedCustomerSession();
+const browserDataAtStartup=JSON.parse(JSON.stringify(data));
+let session=null;
 let page="home";
 let selectedCustomerId=data.customers[0]?.id || null;
 let selectedPolicyId=null;
+let cloudReady=false;
+let knownCloudCustomerIds=new Set();
+let cloudUnsubscribers=[];
+let saveTimer=null;
+let migrationNotice="";
 
-function save(){localStorage.setItem("esureDemoV2",JSON.stringify(data))}
+function stopCloudListeners(){
+  cloudUnsubscribers.forEach(unsubscribe=>{try{unsubscribe()}catch(error){console.warn(error)}});
+  cloudUnsubscribers=[];
+}
+function cleanCustomerForStorage(customer){
+  const clean=JSON.parse(JSON.stringify(customer||{}));
+  delete clean.password;
+  clean.authUid=clean.authUid||null;
+  clean.loginEmail=clean.loginEmail||clean.email||"";
+  clean.loginReady=Boolean(clean.authUid);
+  return clean;
+}
+function cacheLocalData(){
+  const cache={
+    support:data.support||seed.support,
+    customers:(data.customers||[]).map(cleanCustomerForStorage)
+  };
+  localStorage.setItem("esureDemoV2",JSON.stringify(cache));
+}
+async function createOrLinkCustomerAccount(email,password){
+  const normalised=String(email||"").trim().toLowerCase();
+  if(!normalised) throw new Error("Enter a customer email address.");
+  if(String(password||"").length<6) throw new Error("Enter a temporary customer password with at least 6 characters.");
+  let credential;
+  try{
+    credential=await secondaryAuth.createUserWithEmailAndPassword(normalised,password);
+  }catch(error){
+    if(error?.code!=="auth/email-already-in-use") throw error;
+    try{
+      credential=await secondaryAuth.signInWithEmailAndPassword(normalised,password);
+    }catch(signInError){
+      throw new Error("A Firebase account already uses this email. Enter that account's current password or use a different email.");
+    }
+  }
+  const uid=credential.user.uid;
+  await secondaryAuth.signOut().catch(()=>{});
+  return uid;
+}
+async function ensureCustomerAuth(customer,password){
+  if(customer.authUid){
+    customer.loginReady=true;
+    customer.loginEmail=customer.loginEmail||customer.email;
+    await usersRef.doc(customer.authUid).set({
+      role:"customer",
+      customerId:customer.id,
+      email:customer.loginEmail||customer.email||"",
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    },{merge:true});
+    return customer.authUid;
+  }
+  const uid=await createOrLinkCustomerAccount(customer.email,password);
+  customer.authUid=uid;
+  customer.loginEmail=String(customer.email||"").trim().toLowerCase();
+  customer.loginReady=true;
+  delete customer.password;
+  await usersRef.doc(uid).set({
+    role:"customer",
+    customerId:customer.id,
+    email:customer.loginEmail,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  return uid;
+}
+async function writeAllCloudData(){
+  if(session?.role!=="admin") return;
+  clearTimeout(saveTimer);
+  const batch=db.batch();
+  const currentIds=new Set();
+  batch.set(settingsRef,{
+    support:data.support||seed.support,
+    version:2,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  (data.customers||[]).forEach(customer=>{
+    currentIds.add(customer.id);
+    batch.set(customersRef.doc(customer.id),cleanCustomerForStorage(customer));
+  });
+  knownCloudCustomerIds.forEach(id=>{
+    if(!currentIds.has(id)) batch.delete(customersRef.doc(id));
+  });
+  await batch.commit();
+  knownCloudCustomerIds=currentIds;
+  cacheLocalData();
+}
+function queueCloudSave(){
+  if(session?.role!=="admin"||!cloudReady) return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    writeAllCloudData().catch(error=>{
+      console.error("Cloud save failed",error);
+      alert("The portal could not sync this change to Firebase. Check the Firestore rules and internet connection.");
+    });
+  },250);
+}
+function save(){
+  cacheLocalData();
+  queueCloudSave();
+}
+function loadingView(message="Loading your portal…"){
+  app().innerHTML=`<div class="login-wrap"><div class="login-card"><div class="login-top"><img src="esure-logo.png" alt="esure"></div><h1>${htmlEscape(message)}</h1><p style="text-align:center;color:#60708b">Please wait.</p></div></div>`;
+}
+async function migrateBrowserDataToCloud(){
+  data=JSON.parse(JSON.stringify(browserDataAtStartup));
+  let ready=0;
+  let needsPassword=0;
+  for(const customer of data.customers||[]){
+    const password=String(customer.password||"");
+    if(customer.email && password.length>=6){
+      try{
+        await ensureCustomerAuth(customer,password);
+        ready+=1;
+      }catch(error){
+        console.warn(`Could not create login for ${customer.email}`,error);
+        customer.authUid=null;
+        customer.loginReady=false;
+        customer.loginEmail=customer.email||"";
+        needsPassword+=1;
+      }
+    }else{
+      customer.authUid=null;
+      customer.loginReady=false;
+      customer.loginEmail=customer.email||"";
+      needsPassword+=1;
+    }
+    delete customer.password;
+  }
+  knownCloudCustomerIds=new Set();
+  await writeAllCloudData();
+  migrationNotice=needsPassword
+    ? `Browser data moved to Firebase. ${ready} customer login${ready===1?"":"s"} activated. ${needsPassword} customer${needsPassword===1?" needs":"s need"} a temporary password entered in Admin before they can log in on other devices.`
+    : `Browser data moved to Firebase. ${ready} customer login${ready===1?"":"s"} activated.`;
+}
+function applyCustomersSnapshot(snapshot){
+  knownCloudCustomerIds=new Set(snapshot.docs.map(doc=>doc.id));
+  data.customers=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+  if(!data.customers.some(c=>c.id===selectedCustomerId)) selectedCustomerId=data.customers[0]?.id||null;
+  const current=data.customers.find(c=>c.id===selectedCustomerId);
+  if(current && !current.policies?.some(p=>p.id===selectedPolicyId)) selectedPolicyId=null;
+  cacheLocalData();
+}
+async function loadAdminCloudData(){
+  stopCloudListeners();
+  const [settingsSnap,customersSnap]=await Promise.all([settingsRef.get(),customersRef.get()]);
+  if(settingsSnap.exists) data.support=settingsSnap.data().support||seed.support;
+  if(customersSnap.empty){
+    await migrateBrowserDataToCloud();
+  }else{
+    applyCustomersSnapshot(customersSnap);
+  }
+  cloudReady=true;
+  cacheLocalData();
+  cloudUnsubscribers.push(settingsRef.onSnapshot(snapshot=>{
+    if(snapshot.exists){data.support=snapshot.data().support||seed.support;cacheLocalData();if(session?.role==="admin")render();}
+  },error=>console.error("Settings sync failed",error)));
+  cloudUnsubscribers.push(customersRef.onSnapshot(snapshot=>{
+    applyCustomersSnapshot(snapshot);
+    if(session?.role==="admin")render();
+  },error=>console.error("Customer sync failed",error)));
+}
+async function loadCustomerCloudData(customerId){
+  stopCloudListeners();
+  const customerRef=customersRef.doc(customerId);
+  const [settingsSnap,customerSnap]=await Promise.all([settingsRef.get(),customerRef.get()]);
+  if(!customerSnap.exists) throw new Error("This customer account is no longer available.");
+  data={
+    support:settingsSnap.exists?(settingsSnap.data().support||seed.support):seed.support,
+    customers:[{id:customerSnap.id,...customerSnap.data()}]
+  };
+  selectedCustomerId=customerId;
+  selectedPolicyId=null;
+  cloudReady=true;
+  cacheLocalData();
+  cloudUnsubscribers.push(settingsRef.onSnapshot(snapshot=>{
+    if(snapshot.exists){data.support=snapshot.data().support||seed.support;cacheLocalData();if(session?.role==="customer")render();}
+  },error=>console.error("Settings sync failed",error)));
+  cloudUnsubscribers.push(customerRef.onSnapshot(async snapshot=>{
+    if(!snapshot.exists){await logout();return;}
+    data.customers=[{id:snapshot.id,...snapshot.data()}];
+    cacheLocalData();
+    if(session?.role==="customer")render();
+  },error=>console.error("Customer sync failed",error)));
+}
 function money(n){
   const value=Number(n);
   return new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(Number.isFinite(value)?value:0)
@@ -174,7 +360,7 @@ function refreshPolicyStatuses(){
       }
     });
   });
-  if(changed) save();
+  if(changed && session?.role==="admin") save();
 }
 function renewalMessage(policy){
   if(policy.status!=="Active") return "";
@@ -245,49 +431,21 @@ async function login(){
  const pass=document.getElementById("password").value;
  const error=document.getElementById("error");
  error.textContent="";
-
- // Until customer accounts are moved to Firebase, continue using the
- // customer email/password saved with the existing browser portal data.
- const customer=data.customers.find(c=>
-   String(c.email||"").trim().toLowerCase()===email &&
-   String(c.password||"")===pass
- );
- if(customer){
-   await firebase.auth().signOut().catch(()=>{});
-   session={role:"customer",customerId:customer.id,auth:"browser"};
-   sessionStorage.setItem("esureSessionV2",JSON.stringify(session));
-   page="home";
-   render();
-   return;
- }
-
- // Administrator login remains protected by Firebase Authentication.
+ if(!email||!pass){error.textContent="Enter your email address and password.";return;}
  try{
-   const result=await firebase.auth().signInWithEmailAndPassword(email,pass);
-   const userDoc=await firebase.firestore().collection("users").doc(result.user.uid).get();
-   if(!userDoc.exists) throw new Error("This account has not been given portal access.");
-   const profile=userDoc.data()||{};
-   if(profile.role==="admin"){
-     session={role:"admin",uid:result.user.uid,auth:"firebase"};
-     sessionStorage.removeItem("esureSessionV2");
-   }else if(profile.role==="customer" && profile.customerId){
-     session={role:"customer",uid:result.user.uid,customerId:profile.customerId,auth:"firebase"};
-     sessionStorage.removeItem("esureSessionV2");
-   }else{
-     throw new Error("This account has not been given a valid role.");
-   }
-   page="home";
-   render();
+   error.textContent="Signing in…";
+   await auth.signInWithEmailAndPassword(email,pass);
  }catch(err){
-   await firebase.auth().signOut().catch(()=>{});
-   session=null;
-   error.textContent=(err.code&&err.code.startsWith("auth/"))?"Email address or password is incorrect.":err.message;
+   console.error(err);
+   error.textContent="Email address or password is incorrect.";
  }
 }
 async function logout(){
- sessionStorage.removeItem("esureSessionV2");
- if(firebase.auth().currentUser) await firebase.auth().signOut().catch(()=>{});
+ stopCloudListeners();
+ clearTimeout(saveTimer);
+ if(auth.currentUser) await auth.signOut().catch(()=>{});
  session=null;
+ cloudReady=false;
  page="home";
  render();
 }
@@ -515,7 +673,7 @@ function certificate(){
 }
 
 function blankCustomer(){
- return {id:"cust-"+Date.now(),name:"New Customer",email:"newcustomer@example.com",password:"Temporary1",address:"",dob:"",policies:[blankPolicy()]}
+ return {id:"cust-"+Date.now(),name:"New Customer",email:"",loginEmail:"",authUid:null,loginReady:false,address:"",dob:"",policies:[blankPolicy()]}
 }
 function admin(){
  const c=currentCustomer();
@@ -534,7 +692,11 @@ function admin(){
  </div></div>
 
  <div class="card admin-grid">
- ${inp("Customer name","customer.name",c.name)}${inp("Customer email","customer.email",c.email)}${inp("Address","customer.address",c.address,"full")}${inp("Date of birth","customer.dob",c.dob)}${inp("Customer password","customer.password",c.password)}
+ ${inp("Customer name","customer.name",c.name)}
+ <label>Customer login email<input id="customer.email" type="email" value="${String(c.email??"").replace(/"/g,"&quot;")}" ${c.authUid?"readonly":""}></label>
+ ${inp("Address","customer.address",c.address,"full")}${inp("Date of birth","customer.dob",c.dob)}
+ <label>Temporary customer password<input id="customer.password" type="password" value="" placeholder="${c.authUid?"Login already active":"At least 6 characters"}" ${c.authUid?"disabled":""}></label>
+ <div class="full customer-login-status ${c.authUid?"ready":"pending"}">${c.authUid?`Customer Firebase login active: ${htmlEscape(c.loginEmail||c.email)}`:"Enter the customer email and a temporary password, then save to activate login on every device."}</div>
  ${inp("Vehicle make","policy.vehicleMake",p.vehicleMake)}${inp("Vehicle model","policy.vehicleModel",p.vehicleModel)}${inp("Vehicle cc","policy.engineCc",p.engineCc)}${inp("Registration","policy.registration",p.registration)}
  ${inp("Vehicle year","policy.year",p.year)}${inp("Colour","policy.colour",p.colour)}${inp("Policy number","policy.number",p.number)}${inp("Premium","policy.premium",p.premium)}
  ${inp("Premium type","policy.premiumType",p.premiumType)}${inp("Start date","policy.start",p.start)}${inp("End date","policy.end",p.end)}${inp("Cover level","policy.cover",p.cover)}
@@ -587,22 +749,41 @@ function removePolicy(){
  save();
  render();
 }
-function addCustomer(){const c=blankCustomer();data.customers.push(c);selectedCustomerId=c.id;selectedPolicyId=c.policies[0]?.id||null;save();page="admin";render()}
-function removeCustomer(){
+function addCustomer(){const c=blankCustomer();data.customers.push(c);selectedCustomerId=c.id;selectedPolicyId=c.policies[0]?.id||null;page="admin";render()}
+async function removeCustomer(){
  const c=currentCustomer();if(!c)return;
  if(!confirm(`Remove ${c.name} and all of their details and policies? This cannot be undone.`))return;
- data.customers=data.customers.filter(x=>x.id!==c.id);selectedCustomerId=data.customers[0]?.id||null;save();render();
+ try{
+   if(c.authUid) await usersRef.doc(c.authUid).delete().catch(()=>{});
+   data.customers=data.customers.filter(x=>x.id!==c.id);
+   selectedCustomerId=data.customers[0]?.id||null;
+   selectedPolicyId=null;
+   await writeAllCloudData();
+   render();
+ }catch(error){
+   console.error(error);
+   alert("The customer could not be removed from Firebase.");
+ }
 }
-function saveAdmin(showMessage=true){
+async function saveAdmin(showMessage=true){
  const c=currentCustomer(),p=currentPolicy(c);
+ if(!c||!p)return;
+ const temporaryPassword=document.getElementById("customer.password")?.value||"";
  document.querySelectorAll(".admin-grid input,.admin-grid select").forEach(el=>{
+   if(el.id==="customer.password") return;
    const [group,key]=el.id.split(".");
    let v=el.value;
    if(["premium","coverage","excess","totalPaid"].includes(key))v=parseMoneyInput(v);
    if(group==="customer")c[key]=v;else if(group==="policy")p[key]=v;else if(group==="support")data.support[key]=v;
  });
- save();
- if(showMessage){alert("Customer details saved.");render();}
+ try{
+   if(!c.authUid) await ensureCustomerAuth(c,temporaryPassword);
+   await writeAllCloudData();
+   if(showMessage){alert("Customer details saved and synced to Firebase.");render();}
+ }catch(error){
+   console.error(error);
+   alert(firebaseAccountError(error));
+ }
 }
 
 function firebaseAccountError(error){
@@ -611,6 +792,8 @@ function firebaseAccountError(error){
   if(code==="auth/email-already-in-use") return "That email address is already being used.";
   if(code==="auth/invalid-email") return "Enter a valid email address.";
   if(code==="auth/weak-password") return "Choose a stronger password with at least 6 characters.";
+  if(code==="auth/email-already-in-use") return "That customer email already has a Firebase account. Enter its existing password or use another email.";
+  if(code==="permission-denied") return "Firebase blocked the change. Update the Firestore rules supplied with this version.";
   if(code==="auth/requires-recent-login") return "For security, log out and sign in again before changing these details.";
   if(code==="auth/operation-not-allowed") return "Firebase requires the new email address to be verified first.";
   return error?.message||"The change could not be completed.";
@@ -670,28 +853,40 @@ function render(){
  if(!session)loginView();
  else({home,profile,faq,policy,certificate,admin,account}[page]||home)();
 }
-firebase.auth().onAuthStateChanged(async user=>{
+auth.onAuthStateChanged(async user=>{
+  stopCloudListeners();
+  cloudReady=false;
   if(!user){
-    session=storedCustomerSession();
+    session=null;
     render();
     return;
   }
+  loadingView("Loading your secure portal…");
   try{
-    const snap=await firebase.firestore().collection("users").doc(user.uid).get();
+    const snap=await usersRef.doc(user.uid).get();
     const profile=snap.exists?(snap.data()||{}):{};
     if(profile.role==="admin"){
       session={role:"admin",uid:user.uid,auth:"firebase"};
-      sessionStorage.removeItem("esureSessionV2");
+      await loadAdminCloudData();
     }else if(profile.role==="customer" && profile.customerId){
       session={role:"customer",uid:user.uid,customerId:profile.customerId,auth:"firebase"};
-      sessionStorage.removeItem("esureSessionV2");
+      await loadCustomerCloudData(profile.customerId);
     }else{
-      await firebase.auth().signOut();
-      session=storedCustomerSession();
+      throw new Error("This account has not been given portal access.");
     }
-  }catch(e){
-    console.error(e);
-    session=storedCustomerSession();
+    page="home";
+    render();
+    if(migrationNotice){
+      const notice=migrationNotice;
+      migrationNotice="";
+      setTimeout(()=>alert(notice),200);
+    }
+  }catch(error){
+    console.error(error);
+    await auth.signOut().catch(()=>{});
+    session=null;
+    loginView();
+    const errorElement=document.getElementById("error");
+    if(errorElement) errorElement.textContent=error.message||"The portal could not load this account.";
   }
-  render();
 });

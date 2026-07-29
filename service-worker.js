@@ -1,9 +1,9 @@
-const CACHE = 'esure-password-only-v15';
+const CACHE = 'esure-firestore-sync-v17';
 const CORE = [
   './',
   './index.html',
-  './styles.css?v=15',
-  './app.js?v=15',
+  './styles.css?v=17',
+  './app.js?v=17',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
