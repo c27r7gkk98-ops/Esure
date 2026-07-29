@@ -16,6 +16,19 @@
 
   <main id="app"></main>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyCrV19czZ9CjVtrWspwVPNqFpKaA7GU_8M",
+      authDomain: "esure-portal.firebaseapp.com",
+      projectId: "esure-portal",
+      storageBucket: "esure-portal.firebasestorage.app",
+      messagingSenderId: "27972516562",
+      appId: "1:27972516562:web:da1e7d26d1f6ae3cdc0b0b"
+    });
+  </script>
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

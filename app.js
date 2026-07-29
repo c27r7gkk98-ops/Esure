@@ -1,6 +1,5 @@
 
 const seed = {
-  admin: { email: "Mrdhanyalnaweed@gmail.com", password: "D23NXY" },
   support: {
     phone: "0345 606 1373",
     email: "DPO@esure.com",
@@ -10,7 +9,6 @@ const seed = {
     id: "cust-001",
     name: "Muhammad Dhanyal Naweed",
     email: "dhanyalnaweed@icloud.com",
-    password: "dhanyaln4w2008",
     address: "6 Goscote Drive, Lutterworth, LE17 4ES",
     dob: "14/02/2008",
     policies: [{
@@ -41,13 +39,11 @@ function migrate(){
   const old = JSON.parse(localStorage.getItem("esureDemoData") || "null");
   if(!old) return seed;
   return {
-    admin: old.admin || seed.admin,
     support: old.support || seed.support,
     customers: [{
       id:"cust-001",
       name:old.customer?.name || seed.customers[0].name,
       email:old.customer?.email || seed.customers[0].email,
-      password:old.customer?.password || seed.customers[0].password,
       address:old.customer?.address || seed.customers[0].address,
       dob:old.customer?.dob || seed.customers[0].dob,
       policies:[{
@@ -73,7 +69,7 @@ function migrate(){
 }
 
 let data=migrate();
-let session=JSON.parse(sessionStorage.getItem("esureSessionV2")||"null");
+let session=null;
 let page="home";
 let selectedCustomerId=data.customers[0]?.id || null;
 let selectedPolicyId=null;
@@ -233,16 +229,27 @@ function loginView(){
  <button class="btn btn-orange btn-wide" onclick="login()">Next</button><p id="error" style="color:#c51f34;text-align:center"></p>
  </div></div>`;
 }
-function login(){
- const email=document.getElementById("email").value.trim().toLowerCase(),pass=document.getElementById("password").value;
- if(email===data.admin.email.toLowerCase()&&pass===data.admin.password){
-   session={role:"admin"};sessionStorage.setItem("esureSessionV2",JSON.stringify(session));page="home";render();return;
+async function login(){
+ const email=document.getElementById("email").value.trim();
+ const pass=document.getElementById("password").value;
+ const error=document.getElementById("error");
+ error.textContent="";
+ try{
+   const result=await firebase.auth().signInWithEmailAndPassword(email,pass);
+   const userDoc=await firebase.firestore().collection("users").doc(result.user.uid).get();
+   if(!userDoc.exists) throw new Error("This account has not been given portal access.");
+   const profile=userDoc.data()||{};
+   if(profile.role==="admin") session={role:"admin",uid:result.user.uid};
+   else if(profile.role==="customer" && profile.customerId) session={role:"customer",uid:result.user.uid,customerId:profile.customerId};
+   else throw new Error("This account has not been given a valid role.");
+   page="home";render();
+ }catch(err){
+   await firebase.auth().signOut().catch(()=>{});
+   session=null;
+   error.textContent=(err.code&&err.code.startsWith("auth/"))?"Email address or password is incorrect.":err.message;
  }
- const c=data.customers.find(x=>x.email.toLowerCase()===email&&x.password===pass);
- if(c){session={role:"customer",customerId:c.id};sessionStorage.setItem("esureSessionV2",JSON.stringify(session));page="home";render();return}
- document.getElementById("error").textContent="Email address or password is incorrect.";
 }
-function logout(){sessionStorage.removeItem("esureSessionV2");session=null;page="home";render()}
+async function logout(){await firebase.auth().signOut();session=null;page="home";render()}
 function go(p){page=p;render();window.scrollTo(0,0)}
 
 function header(){
@@ -560,4 +567,14 @@ function render(){
  if(!session)loginView();
  else({home,profile,faq,policy,certificate,admin}[page]||home)();
 }
-render();
+firebase.auth().onAuthStateChanged(async user=>{
+  if(!user){session=null;render();return;}
+  try{
+    const snap=await firebase.firestore().collection("users").doc(user.uid).get();
+    const profile=snap.exists?(snap.data()||{}):{};
+    if(profile.role==="admin") session={role:"admin",uid:user.uid};
+    else if(profile.role==="customer" && profile.customerId) session={role:"customer",uid:user.uid,customerId:profile.customerId};
+    else{await firebase.auth().signOut();session=null;}
+  }catch(e){console.error(e);session=null;}
+  render();
+});
