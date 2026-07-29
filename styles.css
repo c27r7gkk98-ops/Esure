@@ -287,3 +287,17 @@ button,input,select,textarea{font:inherit}
     padding-bottom: 110px;
   }
 }
+
+
+/* Administrator-only account settings */
+.nav-admin-account{grid-template-columns:repeat(7,1fr)}
+.account-card{max-width:680px}
+.account-card label{display:block;font-weight:800;margin-top:8px}
+.account-card .input{margin-bottom:16px}
+.account-message{min-height:22px;margin:14px 0 0;text-align:center;font-weight:800}
+.account-message.success{color:#07895f}
+.account-message.error{color:#c51f34}
+@media(max-width:650px){
+  .nav-admin-account{font-size:9px}
+  .nav-admin-account button{padding:7px 1px}
+}

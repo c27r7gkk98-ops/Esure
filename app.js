@@ -9,6 +9,7 @@ const seed = {
     id: "cust-001",
     name: "Muhammad Dhanyal Naweed",
     email: "dhanyalnaweed@icloud.com",
+    password: "",
     address: "6 Goscote Drive, Lutterworth, LE17 4ES",
     dob: "14/02/2008",
     policies: [{
@@ -44,6 +45,7 @@ function migrate(){
       id:"cust-001",
       name:old.customer?.name || seed.customers[0].name,
       email:old.customer?.email || seed.customers[0].email,
+      password:old.customer?.password || "",
       address:old.customer?.address || seed.customers[0].address,
       dob:old.customer?.dob || seed.customers[0].dob,
       policies:[{
@@ -69,7 +71,16 @@ function migrate(){
 }
 
 let data=migrate();
-let session=null;
+function storedCustomerSession(){
+  try{
+    const saved=JSON.parse(sessionStorage.getItem("esureSessionV2")||"null");
+    if(saved?.role==="customer" && data.customers.some(c=>c.id===saved.customerId)) return saved;
+  }catch(error){
+    console.warn("Could not restore customer session",error);
+  }
+  return null;
+}
+let session=storedCustomerSession();
 let page="home";
 let selectedCustomerId=data.customers[0]?.id || null;
 let selectedPolicyId=null;
@@ -230,26 +241,56 @@ function loginView(){
  </div></div>`;
 }
 async function login(){
- const email=document.getElementById("email").value.trim();
+ const email=document.getElementById("email").value.trim().toLowerCase();
  const pass=document.getElementById("password").value;
  const error=document.getElementById("error");
  error.textContent="";
+
+ // Until customer accounts are moved to Firebase, continue using the
+ // customer email/password saved with the existing browser portal data.
+ const customer=data.customers.find(c=>
+   String(c.email||"").trim().toLowerCase()===email &&
+   String(c.password||"")===pass
+ );
+ if(customer){
+   await firebase.auth().signOut().catch(()=>{});
+   session={role:"customer",customerId:customer.id,auth:"browser"};
+   sessionStorage.setItem("esureSessionV2",JSON.stringify(session));
+   page="home";
+   render();
+   return;
+ }
+
+ // Administrator login remains protected by Firebase Authentication.
  try{
    const result=await firebase.auth().signInWithEmailAndPassword(email,pass);
    const userDoc=await firebase.firestore().collection("users").doc(result.user.uid).get();
    if(!userDoc.exists) throw new Error("This account has not been given portal access.");
    const profile=userDoc.data()||{};
-   if(profile.role==="admin") session={role:"admin",uid:result.user.uid};
-   else if(profile.role==="customer" && profile.customerId) session={role:"customer",uid:result.user.uid,customerId:profile.customerId};
-   else throw new Error("This account has not been given a valid role.");
-   page="home";render();
+   if(profile.role==="admin"){
+     session={role:"admin",uid:result.user.uid,auth:"firebase"};
+     sessionStorage.removeItem("esureSessionV2");
+   }else if(profile.role==="customer" && profile.customerId){
+     session={role:"customer",uid:result.user.uid,customerId:profile.customerId,auth:"firebase"};
+     sessionStorage.removeItem("esureSessionV2");
+   }else{
+     throw new Error("This account has not been given a valid role.");
+   }
+   page="home";
+   render();
  }catch(err){
    await firebase.auth().signOut().catch(()=>{});
    session=null;
    error.textContent=(err.code&&err.code.startsWith("auth/"))?"Email address or password is incorrect.":err.message;
  }
 }
-async function logout(){await firebase.auth().signOut();session=null;page="home";render()}
+async function logout(){
+ sessionStorage.removeItem("esureSessionV2");
+ if(firebase.auth().currentUser) await firebase.auth().signOut().catch(()=>{});
+ session=null;
+ page="home";
+ render();
+}
 function go(p){page=p;render();window.scrollTo(0,0)}
 
 function header(){
@@ -261,12 +302,13 @@ function header(){
 }
 function nav(){
  const admin=session.role==="admin";
- return `<nav class="nav ${admin?"nav-admin":""}">
+ return `<nav class="nav ${admin?"nav-admin nav-admin-account":""}">
  <button class="${page==="home"?"active":""}" onclick="go('home')">⌂<br>Home</button>
  <button class="${page==="profile"?"active":""}" onclick="go('profile')">♙<br>Profile</button>
  <button class="${page==="faq"?"active":""}" onclick="go('faq')">?<br>FAQ</button>
  <button class="${page==="certificate"?"active":""}" onclick="go('certificate')">▤<br>Document</button>
- ${admin?`<button class="${page==="admin"?"active":""}" onclick="go('admin')">⚙<br>Admin</button>`:""}
+ ${admin?`<button class="${page==="admin"?"active":""}" onclick="go('admin')">⚙<br>Admin</button>
+ <button class="${page==="account"?"active":""}" onclick="go('account')">♙<br>Account</button>`:""}
  <button class="logout" onclick="logout()">⇥<br>Logout</button>
  </nav>`;
 }
@@ -562,19 +604,94 @@ function saveAdmin(showMessage=true){
  save();
  if(showMessage){alert("Customer details saved.");render();}
 }
+
+function firebaseAccountError(error){
+  const code=error?.code||"";
+  if(code==="auth/wrong-password" || code==="auth/invalid-credential") return "Your current password is incorrect.";
+  if(code==="auth/email-already-in-use") return "That email address is already being used.";
+  if(code==="auth/invalid-email") return "Enter a valid email address.";
+  if(code==="auth/weak-password") return "Choose a stronger password with at least 6 characters.";
+  if(code==="auth/requires-recent-login") return "For security, log out and sign in again before changing these details.";
+  if(code==="auth/operation-not-allowed") return "Firebase requires the new email address to be verified first.";
+  return error?.message||"The change could not be completed.";
+}
+function account(){
+  if(session?.role!=="admin"){page="home";render();return;}
+  shell(`<div class="content">
+    <h1>Account</h1>
+    <p class="muted">Change the administrator password. This page is only visible to administrators.</p>
+
+    <div class="card account-card">
+      <h2>Change admin password</h2>
+      <label>Current password</label>
+      <input class="input" id="accountCurrentPassword" type="password" autocomplete="current-password" placeholder="Enter current password">
+      <label>New password</label>
+      <input class="input" id="accountNewPassword" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+      <label>Confirm new password</label>
+      <input class="input" id="accountConfirmPassword" type="password" autocomplete="new-password" placeholder="Enter new password again">
+      <button class="btn btn-primary btn-wide" onclick="changeAdminPassword()">Change password</button>
+      <p class="account-message" id="accountPasswordMessage" aria-live="polite"></p>
+    </div>
+  </div>`);
+}
+async function reauthenticateAdmin(currentPassword){
+  const user=firebase.auth().currentUser;
+  if(!user?.email) throw new Error("No administrator is signed in.");
+  const credential=firebase.auth.EmailAuthProvider.credential(user.email,currentPassword);
+  await user.reauthenticateWithCredential(credential);
+  return user;
+}
+async function changeAdminPassword(){
+  const currentPassword=document.getElementById("accountCurrentPassword").value;
+  const newPassword=document.getElementById("accountNewPassword").value;
+  const confirmPassword=document.getElementById("accountConfirmPassword").value;
+  const message=document.getElementById("accountPasswordMessage");
+  message.className="account-message";
+  message.textContent="";
+  if(!currentPassword||!newPassword||!confirmPassword){message.classList.add("error");message.textContent="Complete all password fields.";return;}
+  if(newPassword.length<6){message.classList.add("error");message.textContent="The new password must contain at least 6 characters.";return;}
+  if(newPassword!==confirmPassword){message.classList.add("error");message.textContent="The new passwords do not match.";return;}
+  try{
+    const user=await reauthenticateAdmin(currentPassword);
+    await user.updatePassword(newPassword);
+    message.classList.add("success");
+    message.textContent="Admin password changed successfully.";
+    document.getElementById("accountCurrentPassword").value="";
+    document.getElementById("accountNewPassword").value="";
+    document.getElementById("accountConfirmPassword").value="";
+  }catch(error){
+    message.classList.add("error");
+    message.textContent=firebaseAccountError(error);
+  }
+}
+
 function render(){
  refreshPolicyStatuses();
  if(!session)loginView();
- else({home,profile,faq,policy,certificate,admin}[page]||home)();
+ else({home,profile,faq,policy,certificate,admin,account}[page]||home)();
 }
 firebase.auth().onAuthStateChanged(async user=>{
-  if(!user){session=null;render();return;}
+  if(!user){
+    session=storedCustomerSession();
+    render();
+    return;
+  }
   try{
     const snap=await firebase.firestore().collection("users").doc(user.uid).get();
     const profile=snap.exists?(snap.data()||{}):{};
-    if(profile.role==="admin") session={role:"admin",uid:user.uid};
-    else if(profile.role==="customer" && profile.customerId) session={role:"customer",uid:user.uid,customerId:profile.customerId};
-    else{await firebase.auth().signOut();session=null;}
-  }catch(e){console.error(e);session=null;}
+    if(profile.role==="admin"){
+      session={role:"admin",uid:user.uid,auth:"firebase"};
+      sessionStorage.removeItem("esureSessionV2");
+    }else if(profile.role==="customer" && profile.customerId){
+      session={role:"customer",uid:user.uid,customerId:profile.customerId,auth:"firebase"};
+      sessionStorage.removeItem("esureSessionV2");
+    }else{
+      await firebase.auth().signOut();
+      session=storedCustomerSession();
+    }
+  }catch(e){
+    console.error(e);
+    session=storedCustomerSession();
+  }
   render();
 });
